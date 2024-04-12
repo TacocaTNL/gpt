@@ -59,11 +59,37 @@ def estimate_loss():
     model.train()
     return out
 
+class Head(nn.Module):
+    ''' one head of self-attention'''
+
+    def __init__(self, head_size):
+        super().__init__()
+        self.key = nn.Linear(n_embd, head_size, bias=False) # public information about token itself
+        self.query = nn.Linear(n_embd, head_size, bias=False) # public information that token wants to have
+        self.value = nn.Linear(n_embd, head_size, bias=False) # private information about token
+        self.register_buffer('tril', torch.tril(torch.ones(block_size, block_size))) # lower triangular matrix
+
+    def forward(self, x):
+        B, T, C = x.shape
+        k = self.key(x) # shape: (B, T, C)
+        q = self.query(x) # shape: (B, T, C)
+
+        # compute attention scores
+        wei = q @ k.transpose(-2, -1) * C**-0.5 # (B, T, C) @ (B, T, C) --> (B, T, T)
+        wei = wei.masked_fill(self.tril[:T, :T] == 0, float('-inf')) # create decoder-block. (B, T, T)
+        wei = F.softmax(wei, dim=-1) # (B, T, T)
+
+        # perform weighted aggregation of values
+        v = self.value(x) # (B, T, C)
+        out = wei @ v # (B, T, T) @ (B, T, C) --> (B, T, C)
+        return out
+
 class BigramLanguageModel(nn.Module):
     def __init__(self):
         super().__init__()
         self.token_embedding = nn.Embedding(vocab_size, n_embd)
         self.position_embedding = nn.Embedding(block_size, n_embd)
+        self.sa_head = Head(n_embd) 
         self.lm_head = nn.Linear(n_embd, vocab_size)
         
     def forward(self, idx, targets=None):
@@ -74,6 +100,7 @@ class BigramLanguageModel(nn.Module):
         tok_emb = self.token_embedding(idx) # shape: (batch_size, block_size, n_embd) (B, T, C)
         pos_emb = self.position_embedding(torch.arange(T, device=device)) # shape: (block_size, n_embd) (T, C)
         concat_emb = tok_emb + pos_emb # shape: (B, T, C)
+        concat_emb = self.sa_head(concat_emb) # apply one head of self-attention (B, T, C)
         logits = self.lm_head(concat_emb) # shape: (batch_size, block_size, vocab_size) (B, T, C)
 
         if targets is None:

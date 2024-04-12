@@ -6,8 +6,8 @@ from torch.nn import functional as F
 # Hyperparameters
 batch_size = 32 # how many samples to process at once?
 block_size = 8 # what is the maximum length of a prediction?
-max_iters = 1000 # how many iterations to train for?
-eval_interval = 100 # how often to evaluate the model?
+max_iters = 10000 # how many iterations to train for?
+eval_interval = 1000 # how often to evaluate the model?
 lr = 1e-2 # learning rate
 test_size = 0.1 # what fraction of the data to use for testing?
 device = 'cuda' if torch.cuda.is_available() else 'cpu' # use the GPU if you have one
